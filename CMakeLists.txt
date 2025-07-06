@@ -99,6 +99,8 @@ elseif(TARGET_OS STREQUAL "mac")
   set(AUTO_VULKAN_BACKEND OFF)
 endif()
 
+option(RUST "Enable rust-bridge compilation" OFF)
+
 option(WEBSOCKETS "Enable websockets support" OFF)
 option(MYSQL "Enable mysql support" OFF)
 option(TEST_MYSQL "Test mysql support in unit tests (also sets -DMYSQL=ON)" OFF)
@@ -524,7 +526,11 @@ find_package(Opus)
 find_package(Opusfile)
 find_package(PNG)
 find_package(Python3)
+if(RUST)
 find_package(Rust)
+else()
+set(RUST_VERSION_STRING "DISABLED")
+endif()
 find_package(SDL2)
 find_package(SQLite3)
 if(DISCORD)
@@ -638,7 +644,7 @@ endif()
 if(NOT(Python3_FOUND))
   message(SEND_ERROR "You must install Python to compile ${CMAKE_PROJECT_NAME}")
 endif()
-if(NOT(RUST_FOUND))
+if(RUST AND NOT(RUST_FOUND))
   message(SEND_ERROR "You must install Rust and Cargo to compile ${CMAKE_PROJECT_NAME}")
 endif()
 if(NOT(SQLite3_FOUND))
@@ -712,7 +718,9 @@ if(TARGET_OS STREQUAL "windows")
   list(APPEND PLATFORM_LIBS shlwapi) # PathIsRelativeW
   list(APPEND PLATFORM_LIBS version ws2_32) # Windows sockets
   list(APPEND PLATFORM_LIBS advapi32) # Reg* and Crypt* functions
+  if(RUST)
   list(APPEND PLATFORM_LIBS bcrypt userenv) # for Rust (https://github.com/rust-lang/rust/issues/91974)
+  endif()
   list(APPEND PLATFORM_LIBS ole32) # CoInitialize(Ex)
   list(APPEND PLATFORM_LIBS shell32)
   list(APPEND PLATFORM_LIBS ntdll) # https://github.com/ddnet/ddnet/issues/6725
@@ -748,7 +756,9 @@ elseif(TARGET_OS STREQUAL "emscripten")
   set(PLATFORM_CLIENT)
   set(PLATFORM_LIBS)
   list(APPEND PLATFORM_LIBS rt) # clock_gettime for glibc < 2.17
+  if(RUST)
   list(APPEND PLATFORM_LIBS dl) # for Rust
+  endif()
 else()
   find_package(Notify)
   find_package(OpenGL)
@@ -758,7 +768,9 @@ else()
   if(TARGET_OS STREQUAL "linux")
     set(PLATFORM_LIBS)
     list(APPEND PLATFORM_LIBS rt) # clock_gettime for glibc < 2.17
+    if(RUST)
     list(APPEND PLATFORM_LIBS dl) # for Rust
+    endif()
   else()
     set(PLATFORM_LIBS)
   endif()
@@ -834,6 +846,7 @@ endif()
 # RUST
 ########################################################################
 
+if(RUST)
 set_glob(RUST_BASE GLOB_RECURSE "rs;toml" src/base
   Cargo.toml
   color.rs
@@ -993,6 +1006,7 @@ else()
       DEPENDS ${RUST_SRC}
     )
   endforeach()
+endif()
 endif()
 
 ########################################################################
@@ -2559,7 +2573,7 @@ if(CLIENT)
     ${VULKAN_LIBRARIES}
 
     ${TARGET_STEAMAPI}
-    rust_engine_shared
+    $<$<BOOL:${RUST}>:rust_engine_shared>
 
     ${PLATFORM_CLIENT_LIBS}
     ${LIBS}
@@ -2603,7 +2617,7 @@ if(CLIENT)
       $<TARGET_OBJECTS:engine-gfx>
       $<TARGET_OBJECTS:engine-shared>
       $<TARGET_OBJECTS:game-shared>
-      $<TARGET_OBJECTS:rust-bridge-shared>
+      $<$<BOOL:${RUST}>:$<TARGET_OBJECTS:rust-bridge-shared>>
     )
   else()
     add_executable(game-client WIN32
@@ -2615,7 +2629,7 @@ if(CLIENT)
       $<TARGET_OBJECTS:engine-gfx>
       $<TARGET_OBJECTS:engine-shared>
       $<TARGET_OBJECTS:game-shared>
-      $<TARGET_OBJECTS:rust-bridge-shared>
+      $<$<BOOL:${RUST}>:$<TARGET_OBJECTS:rust-bridge-shared>>
     )
   endif()
   set_property(TARGET game-client
@@ -2806,7 +2820,7 @@ if(SERVER)
     ${MINIUPNPC_LIBRARIES}
     ${MYSQL_LIBRARIES}
     ${TARGET_ANTIBOT}
-    rust_engine_shared
+    $<$<BOOL:${RUST}>:rust_engine_shared>
 
     ${LIBS}
   )
@@ -2816,7 +2830,7 @@ if(SERVER)
       ${SERVER_SRC}
       $<TARGET_OBJECTS:engine-shared>
       $<TARGET_OBJECTS:game-shared>
-      $<TARGET_OBJECTS:rust-bridge-shared>
+      $<$<BOOL:${RUST}>:$<TARGET_OBJECTS:rust-bridge-shared>>
   )
   set_property(TARGET game-server-without-main
       PROPERTY OUTPUT_NAME ${SERVER_EXECUTABLE}
@@ -2835,7 +2849,7 @@ if(SERVER)
       ${SERVER_VERSIONINFO}
       $<TARGET_OBJECTS:engine-shared>
       $<TARGET_OBJECTS:game-shared>
-      $<TARGET_OBJECTS:rust-bridge-shared>
+      $<$<BOOL:${RUST}>:$<TARGET_OBJECTS:rust-bridge-shared>>
     )
   else()
     add_executable(game-server
@@ -2846,7 +2860,7 @@ if(SERVER)
       $<TARGET_OBJECTS:game-server-without-main>
       $<TARGET_OBJECTS:engine-shared>
       $<TARGET_OBJECTS:game-shared>
-      $<TARGET_OBJECTS:rust-bridge-shared>
+      $<$<BOOL:${RUST}>:$<TARGET_OBJECTS:rust-bridge-shared>>
     )
   endif()
   set_property(TARGET game-server
@@ -3052,7 +3066,7 @@ if((GTEST_FOUND OR DOWNLOAD_GTEST) AND SERVER)
     $<TARGET_OBJECTS:engine-gfx>
     $<TARGET_OBJECTS:engine-shared>
     $<TARGET_OBJECTS:game-shared>
-    $<TARGET_OBJECTS:rust-bridge-shared>
+    $<$<BOOL:${RUST}>:$<TARGET_OBJECTS:rust-bridge-shared>>
     ${DEPS}
   )
   target_link_libraries(${TARGET_TESTRUNNER} ${PNG_LIBRARIES} ${GTEST_LIBRARIES} ${LIBS_SERVER})
@@ -3070,6 +3084,7 @@ if((GTEST_FOUND OR DOWNLOAD_GTEST) AND SERVER)
   add_custom_target(run_tests
     DEPENDS run_cxx_tests
   )
+  if(RUST)
   if(NOT MSVC OR CMAKE_BUILD_TYPE STREQUAL Release)
     # On MSVC, Rust tests only work in the release mode because we link our C++
     # code with the debug C standard library (/MTd) but Rust only supports
@@ -3078,8 +3093,10 @@ if((GTEST_FOUND OR DOWNLOAD_GTEST) AND SERVER)
     # See also https://github.com/rust-lang/rust/issues/39016.
     add_dependencies(run_tests run_rust_tests)
   endif()
+  endif()
 endif()
 
+if(RUST)
 add_library(rust_test STATIC EXCLUDE_FROM_ALL
   $<TARGET_OBJECTS:engine-gfx>
   $<TARGET_OBJECTS:engine-shared>
@@ -3100,6 +3117,7 @@ add_custom_target(run_rust_tests
   DEPENDS rust_test
   VERBATIM
 )
+endif()
 
 ########################################################################
 # INSTALLATION
@@ -3601,7 +3619,11 @@ foreach(target ${TARGETS_OWN})
   endif()
   target_include_directories(${target} PRIVATE ${PROJECT_BINARY_DIR}/src)
   target_include_directories(${target} PRIVATE src)
+  if(RUST)
   target_include_directories(${target} PRIVATE src/rust-bridge)
+  else()
+  target_compile_definitions(${target} PRIVATE CONF_NO_RUST)
+  endif()
   target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:CONF_DEBUG>)
   target_include_directories(${target} SYSTEM PRIVATE ${CURL_INCLUDE_DIRS} ${SQLite3_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS})
   target_compile_definitions(${target} PRIVATE GLEW_STATIC)

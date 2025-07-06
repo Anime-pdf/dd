@@ -39,9 +39,12 @@
 #include <engine/shared/protocol.h>
 #include <engine/shared/protocol7.h>
 #include <engine/shared/protocol_ex.h>
-#include <engine/shared/rust_version.h>
 #include <engine/shared/snapshot.h>
 #include <engine/shared/uuid_manager.h>
+
+#ifndef CONF_NO_RUST
+#include <engine/shared/rust_version.h>
+#endif
 
 #include <game/generated/protocol.h>
 #include <game/generated/protocol7.h>
@@ -4430,7 +4433,9 @@ void CClient::RegisterCommands()
 	m_pConsole->Register("save_replay", "?i[length] ?r[filename]", CFGFLAG_CLIENT, Con_SaveReplay, this, "Save a replay of the last defined amount of seconds");
 	m_pConsole->Register("benchmark_quit", "i[seconds] r[file]", CFGFLAG_CLIENT | CFGFLAG_STORE, Con_BenchmarkQuit, this, "Benchmark frame times for number of seconds to file, then quit");
 
-	RustVersionRegister(*m_pConsole);
+#ifndef CONF_NO_RUST
+	RustVersionRegister(*Console());
+#endif
 
 	m_pConsole->Chain("cl_timeout_seed", ConchainTimeoutSeed, this);
 	m_pConsole->Chain("cl_replays", ConchainReplays, this);

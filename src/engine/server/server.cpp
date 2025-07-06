@@ -32,8 +32,11 @@
 #include <engine/shared/protocol.h>
 #include <engine/shared/protocol7.h>
 #include <engine/shared/protocol_ex.h>
-#include <engine/shared/rust_version.h>
 #include <engine/shared/snapshot.h>
+
+#ifndef CONF_NO_RUST
+#include <engine/shared/rust_version.h>
+#endif
 
 #include <game/version.h>
 
@@ -4220,7 +4223,9 @@ void CServer::RegisterCommands()
 	Console()->Register("reload_announcement", "", CFGFLAG_SERVER, ConReloadAnnouncement, this, "Reload the announcements");
 	Console()->Register("reload_maplist", "", CFGFLAG_SERVER, ConReloadMaplist, this, "Reload the maplist");
 
+#ifndef CONF_NO_RUST
 	RustVersionRegister(*Console());
+#endif
 
 	Console()->Chain("sv_name", ConchainSpecialInfoupdate, this);
 	Console()->Chain("password", ConchainSpecialInfoupdate, this);
